@@ -1,0 +1,13 @@
+{
+  "name": "manga-drama-platform",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api-gateway start:dev",
+    "dev:ai": "pnpm --filter ai-runner dev",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test"
+  },
+  "packageManager": "pnpm@9.12.0"
+}
