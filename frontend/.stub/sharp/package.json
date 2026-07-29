@@ -1,0 +1,6 @@
+{
+  "name": "sharp",
+  "version": "0.0.0-stub",
+  "description": "Local stub replacing the native sharp package so pnpm install completes in the sandbox. Next.js dev does not require sharp; it is only used for production image optimization.",
+  "main": "./index.js"
+}

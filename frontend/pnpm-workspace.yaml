@@ -1,0 +1,5 @@
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver
+overrides:
+  sharp: link:./.stub/sharp
