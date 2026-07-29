@@ -1,0 +1,359 @@
+// Prisma schema for the multilingual learning platform backend.
+// See https://pris.ly/d/prisma-schema for documentation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Application user. Used by the auth module for register/login.
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phone         String?  @unique
+  passwordHash  String
+  nickname      String
+  avatar        String?
+  targetLanguage String? // english | japanese | korean
+  currentLevel   String? // CEFR: A1 | A2 | B1 | B2 | C1 | C2
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vocabularyProgress   UserVocabulary[]
+  grammarAttempts      UserGrammarAttempt[]
+  speakingAttempts     UserSpeakingAttempt[]
+  listeningAttempts    UserListeningAttempt[]
+  lessonProgress       UserLessonProgress[]
+  badges               UserBadge[]
+  posts                Post[]
+  comments             Comment[]
+  postLikes            PostLike[]
+
+  @@map("users")
+}
+
+/// A learnable language (english / japanese / korean ...).
+model Language {
+  id     String  @id @default(cuid())
+  code   String  @unique // english / japanese / korean
+  name   String         // 英语 / 日语 / 韩语
+  icon   String?
+  levels Level[]
+
+  @@map("languages")
+}
+
+/// A CEFR level (A1..C2) belonging to a Language.
+model Level {
+  id         String   @id @default(cuid())
+  languageId String
+  language   Language @relation(fields: [languageId], references: [id])
+  code       String          // A1 / A2 / B1 / B2 / C1 / C2
+  name       String          // 入门 / 初级 / 中级 ...
+  order      Int             // 1-6
+  units      Unit[]
+
+  @@unique([languageId, code])
+  @@map("levels")
+}
+
+/// A unit within a Level, grouping related lessons.
+model Unit {
+  id          String   @id @default(cuid())
+  levelId     String
+  level       Level    @relation(fields: [levelId], references: [id])
+  title       String          // 单元标题
+  description String?
+  order       Int
+  lessons     Lesson[]
+
+  @@map("units")
+}
+
+/// A single lesson inside a Unit.
+model Lesson {
+  id          String   @id @default(cuid())
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id])
+  title       String
+  description String?
+  order       Int
+  type        String          // vocabulary / grammar / speaking / listening / mixed
+  duration    Int             // 预计时长（分钟）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vocabularies       Vocabulary[]
+  grammarQuestions   GrammarQuestion[]
+  speakingExercises  SpeakingExercise[]
+  listeningExercises ListeningExercise[]
+  userProgress       UserLessonProgress[]
+
+  @@map("lessons")
+}
+
+// ============================================================
+// Task 4: Vocabulary / SRS (单词记忆)
+// ============================================================
+
+model Vocabulary {
+  id                 String   @id @default(cuid())
+  lessonId           String?
+  lesson             Lesson?  @relation(fields: [lessonId], references: [id])
+  languageCode       String                     // english / japanese / korean
+  word               String
+  translation        String
+  phonetic           String?
+  audioUrl           String?
+  example            String?
+  exampleTranslation String?
+  createdAt          DateTime @default(now())
+
+  userProgress UserVocabulary[]
+
+  @@map("vocabularies")
+}
+
+model UserVocabulary {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  vocabularyId    String
+  vocabulary      Vocabulary @relation(fields: [vocabularyId], references: [id])
+  srsRepetitions  Int      @default(0)
+  srsInterval     Int      @default(0)   // days
+  srsEase         Float    @default(2.5)
+  nextReviewAt    DateTime @default(now())
+  lastReviewedAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, vocabularyId])
+  @@map("user_vocabularies")
+}
+
+// ============================================================
+// Task 5: Grammar Practice (语法练习)
+// ============================================================
+
+model GrammarQuestion {
+  id           String   @id @default(cuid())
+  lessonId     String?
+  lesson       Lesson?  @relation(fields: [lessonId], references: [id])
+  languageCode String
+  type         String                  // MULTIPLE_CHOICE / FILL_BLANK / CORRECTION
+  question     String
+  options      Json?                    // string[] for choice
+  answer       String
+  explanation  String?
+  createdAt    DateTime @default(now())
+
+  attempts UserGrammarAttempt[]
+
+  @@map("grammar_questions")
+}
+
+model UserGrammarAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  questionId  String
+  question    GrammarQuestion @relation(fields: [questionId], references: [id])
+  userAnswer  String
+  isCorrect   Boolean
+  attemptedAt DateTime @default(now())
+
+  @@map("user_grammar_attempts")
+}
+
+// ============================================================
+// Task 6: Speaking Practice (口语跟读)
+// ============================================================
+
+model SpeakingExercise {
+  id           String   @id @default(cuid())
+  lessonId     String?
+  lesson       Lesson?  @relation(fields: [lessonId], references: [id])
+  languageCode String
+  text         String                 // 跟读文本
+  audioUrl     String                 // 原音 URL
+  difficulty   String   @default("A1")
+  createdAt    DateTime @default(now())
+
+  attempts UserSpeakingAttempt[]
+
+  @@map("speaking_exercises")
+}
+
+model UserSpeakingAttempt {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  exerciseId   String
+  exercise     SpeakingExercise @relation(fields: [exerciseId], references: [id])
+  userAudioUrl String?
+  transcription String?
+  score        Int?                    // 0-100
+  wordFeedback Json?                   // [{word, match, expected}]
+  attemptedAt  DateTime @default(now())
+
+  @@map("user_speaking_attempts")
+}
+
+// ============================================================
+// Task 7: Listening Practice (听力训练)
+// ============================================================
+
+model ListeningExercise {
+  id           String   @id @default(cuid())
+  lessonId     String?
+  lesson       Lesson?  @relation(fields: [lessonId], references: [id])
+  languageCode String
+  audioUrl     String
+  transcript   String?
+  difficulty   String   @default("A1")
+  createdAt    DateTime @default(now())
+
+  questions ListeningQuestion[]
+  attempts   UserListeningAttempt[]
+
+  @@map("listening_exercises")
+}
+
+model ListeningQuestion {
+  id           String   @id @default(cuid())
+  exerciseId   String
+  exercise     ListeningExercise @relation(fields: [exerciseId], references: [id])
+  type         String                 // MULTIPLE_CHOICE / FILL_BLANK / TRUE_FALSE
+  question     String
+  options      Json?
+  answer       String
+
+  @@map("listening_questions")
+}
+
+model UserListeningAttempt {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  exerciseId  String
+  exercise    ListeningExercise @relation(fields: [exerciseId], references: [id])
+  questionId  String?
+  userAnswer  String
+  isCorrect   Boolean
+  attemptedAt DateTime @default(now())
+
+  @@map("user_listening_attempts")
+}
+
+// ============================================================
+// Task 8: Lesson Progress (课时进度，提前定义供 Task 8 使用)
+// ============================================================
+
+model UserLessonProgress {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  lessonId     String
+  lesson       Lesson   @relation(fields: [lessonId], references: [id])
+  status       String   @default("NOT_STARTED") // NOT_STARTED / IN_PROGRESS / COMPLETED
+  accuracy     Float?   // 正确率 0-1
+  timeSpent    Int      @default(0) // 秒
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+  @@map("user_lesson_progress")
+}
+
+// ============================================================
+// Task 11: Achievement (成就，提前定义)
+// ============================================================
+
+model Badge {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String
+  icon        String
+  category    String   // streak / learning / social / milestone
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+// ============================================================
+// Task 10: Community (社区，提前定义)
+// ============================================================
+
+model Circle {
+  id           String   @id @default(cuid())
+  languageCode String   @unique // english / japanese / korean
+  name         String
+  description  String?
+  icon         String?
+  posts        Post[]
+  createdAt    DateTime @default(now())
+
+  @@map("circles")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  circleId  String
+  circle    Circle   @relation(fields: [circleId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  title     String
+  content   String
+  tags      String[]
+  likeCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[]
+  likes    PostLike[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("comments")
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@map("post_likes")
+}

@@ -1,0 +1,6 @@
+{
+  "name": "bcrypt",
+  "version": "0.0.0-stub",
+  "description": "Local stub replacing the native bcrypt package so pnpm install completes in the sandbox. No auth code uses bcrypt yet in this scaffold.",
+  "main": "./index.js"
+}
